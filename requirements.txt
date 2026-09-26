@@ -1,0 +1,6 @@
+Flask>=3.1,<4
+numpy>=2.0,<3
+opencv-python>=4.10,<5
+ultralytics>=8.3,<9
+pytest>=8.0,<9
+PyYAML>=6.0,<7

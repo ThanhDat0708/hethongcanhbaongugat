@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Driver Watch</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar"><div><p class="eyebrow">REALTIME SAFETY SYSTEM</p><h1>Driver Watch</h1></div><span id="connection" class="pill">CONNECTING</span></header>
+    <section class="hero"><div><p class="eyebrow">CAMERA MONITOR</p><h2>Giữ sự tỉnh táo trên mọi hành trình.</h2><p class="muted">YOLO theo dõi mắt, miệng và thời lượng bất thường để cảnh báo sớm.</p></div><div class="signal"><span class="dot"></span><span id="status">NORMAL</span></div></section>
+    <section class="grid">
+      <div class="video-panel"><div class="panel-head"><span>LIVE FEED</span><span id="model">MODEL OFFLINE</span></div><div class="video-frame"><img src="/video_feed" alt="Luồng camera tài xế"></div><img id="snapshot" class="snapshot" alt="Ảnh chụp cảnh báo"></div>
+      <aside class="metrics"><div class="metric"><span>CLASS</span><strong id="class">UNKNOWN</strong><small>CONFIDENCE <b id="confidence">0.00</b></small></div><div class="metric"><span>EYE CLOSED TIME</span><strong id="eye-time">0.00 s</strong><small>YAWN TIME <b id="mouth-time">0.00 s</b></small></div><div class="metric accent"><span>THỜI GIAN BẤT THƯỜNG</span><strong id="abnormal">0.00 s</strong><small id="alert"></small></div></aside>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

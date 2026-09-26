@@ -1,0 +1,7 @@
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+runs/
+models/*.pt
+!models/.gitkeep

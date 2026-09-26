@@ -1,0 +1,21 @@
+model:
+  path: models/best.pt
+  confidence: 0.60
+  device: cpu
+  imgsz: 320
+
+camera:
+  index: 0
+  width: 640
+  height: 480
+  fps: 15
+
+snapshot_dir: snapshots
+
+drowsiness:
+  eye_closed_time: 2.0
+  yawn_time: 1.5
+  drowsiness_time: 2.5
+  alert_time: 5.0
+  alert_cooldown: 5.0
+  consecutive_frames: 3

@@ -1,0 +1,11 @@
+path: dataset
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: face
+  1: eye_open
+  2: eye_closed
+  3: mouth_open
+  4: mouth_closed
