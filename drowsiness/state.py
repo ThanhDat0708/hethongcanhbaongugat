@@ -44,8 +44,8 @@ class DrowsinessStateMachine:
     def update_prediction(self, predicted_class: str | None, confidence: float, now: float) -> StateSnapshot:
         label = predicted_class or "UNKNOWN"
         normalized = label.lower()
-        eye = "CLOSED" if normalized == "eyeclose" else "OPEN" if normalized == "neutral" else None
-        mouth = "OPEN" if normalized == "yawn" else "CLOSED" if normalized == "neutral" else None
+        eye = "CLOSED" if normalized == "eyeclose" else "OPEN" if normalized in {"neutral", "happy"} else None
+        mouth = "OPEN" if normalized == "yawn" else "CLOSED" if normalized in {"neutral", "happy"} else None
         return self._update(eye, mouth, now, label, confidence)
 
     def update_detection(self, eye: str | None, mouth: str | None,
