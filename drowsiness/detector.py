@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 import cv2
 
@@ -99,14 +100,47 @@ def classify_detection(detections: list[Detection]) -> tuple[str | None, str | N
 
 
 def open_camera(index: int, width: int = 640, height: int = 480, fps: int = 15):
-    camera = cv2.VideoCapture(index)
-    if not camera.isOpened():
-        camera.release()
-        raise RuntimeError(f"Cannot open camera index {index}")
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-    camera.set(cv2.CAP_PROP_FPS, fps)
-    return camera
+    indices = list(dict.fromkeys((index, 0, 1, 2, 3)))
+    if sys.platform == "win32":
+        backends = (
+            ("DirectShow", cv2.CAP_DSHOW),
+            ("Media Foundation", cv2.CAP_MSMF),
+            ("OpenCV default", cv2.CAP_ANY),
+        )
+    else:
+        backends = (("OpenCV default", cv2.CAP_ANY),)
+
+    failures: list[str] = []
+    for camera_index in indices:
+        for backend_name, backend in backends:
+            camera = None
+            try:
+                camera = cv2.VideoCapture(camera_index, backend)
+                if not camera.isOpened():
+                    failures.append(f"camera {camera_index} ({backend_name}): không mở được")
+                    camera.release()
+                    continue
+                camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                camera.set(cv2.CAP_PROP_FPS, fps)
+                ok, _ = camera.read()
+                if not ok:
+                    failures.append(f"camera {camera_index} ({backend_name}): không có hình")
+                    camera.release()
+                    continue
+                return camera
+            except cv2.error as error:
+                failures.append(f"camera {camera_index} ({backend_name}): {error}")
+                if camera is not None:
+                    camera.release()
+
+    details = "; ".join(failures)
+    raise RuntimeError(
+        "Không mở/đọc được camera ở các cổng 0–3. "
+        "Đóng ứng dụng đang dùng camera, kiểm tra quyền Camera trong Windows "
+        "Settings > Privacy & security > Camera, rồi thử lại. "
+        f"Chi tiết: {details}"
+    )
 
 
 def annotate_camera_focus(frame, status: str = "NORMAL"):

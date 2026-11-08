@@ -11,6 +11,7 @@ camera:
   fps: 15
 
 snapshot_dir: snapshots
+history_path: history/events.db
 
 drowsiness:
   eye_closed_time: 2.0

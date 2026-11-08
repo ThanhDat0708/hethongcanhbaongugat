@@ -15,6 +15,7 @@ class Settings:
     camera_fps: int = 15
     inference_size: int = 320
     snapshot_dir: Path = Path("snapshots")
+    history_path: Path = Path("history/events.db")
     eye_closed_threshold: float = 2.0
     yawn_threshold: float = 1.5
     drowsiness_threshold: float = 2.5
@@ -46,6 +47,7 @@ def load_settings(path: str | Path = "config.yaml") -> Settings:
         camera_fps=camera.get("fps", 15),
         inference_size=model.get("imgsz", 320),
         snapshot_dir=config_path.parent / values.get("snapshot_dir", "snapshots"),
+        history_path=config_path.parent / values.get("history_path", "history/events.db"),
         eye_closed_threshold=drowsiness.get("eye_closed_time", values.get("eye_closed_threshold", 2.0)),
         yawn_threshold=drowsiness.get("yawn_time", values.get("mouth_open_threshold", 1.5)),
         drowsiness_threshold=drowsiness.get("drowsiness_time", values.get("drowsiness_threshold", 2.5)),

@@ -1,5 +1,7 @@
-from drowsiness.app import app
+from pathlib import Path
+
+from drowsiness.gui import run_gui
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    run_gui(Path(__file__).resolve().parent / "config.yaml")

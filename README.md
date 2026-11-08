@@ -1,38 +1,44 @@
 # Driver Watch
 
-He thong Flask + OpenCV + Ultralytics YOLO nhan dien dau hieu tai xe ngu gat.
+Ứng dụng Tkinter + OpenCV + Ultralytics YOLO theo dõi dấu hiệu buồn ngủ của tài xế.
 
-## Cai dat
+## Cài đặt trên Windows
 
-Dung Python 3.14 trong virtual environment duoc yeu cau:
-
-```powershell
-& E:\study_python\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-## Chay
-
-Dat model da train tai `models/best.pt`, sau do:
+Mở PowerShell tại thư mục dự án. Không cần lệnh launcher `py`.
 
 ```powershell
-& E:\study_python\.venv\Scripts\python.exe run.py
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Mo `http://127.0.0.1:5000`. Neu chua co model, giao dien van chay de kiem tra API va hien trang thai MODEL OFFLINE.
+## Chạy giao diện Tkinter
 
-## Test va train
+Đặt model đã train tại `models\best.pt` nếu có, sau đó chạy:
 
 ```powershell
-& E:\study_python\.venv\Scripts\python.exe -m pytest -q
-& E:\study_python\.venv\Scripts\python.exe scripts/train.py
+.\.venv\Scripts\python.exe .\run.py
 ```
 
-Dataset dung format YOLO trong `dataset/`, voi cac class `face`, `eye_open`, `eye_closed`, `mouth_open`, `mouth_closed`. Truoc khi train, moi anh phai co mot file label cung ten trong `labels/train` va `labels/val`.
+Giao diện có bố cục camera bên trái, trạng thái và thông số bên phải, nhật ký cùng thanh chỉnh ngưỡng phía dưới. Nhật ký được lưu trong `history\events.db` và nạp lại khi mở ứng dụng. Camera thử các cổng 0–3 bằng DirectShow, Media Foundation và backend mặc định trên Windows; chọn webcam phù hợp bằng `camera.index` trong `config.yaml`. Trên Windows, âm báo lặp khi có cảnh báo; có thể tắt tiếng trên giao diện.
 
-Moi dong label co format:
+Nếu camera không mở được, đóng các ứng dụng khác đang dùng webcam, cho phép ứng dụng desktop truy cập camera tại **Settings > Privacy & security > Camera**, rồi thử lại. Lỗi kết nối hiện chi tiết trong giao diện và nhật ký.
 
-```text
-class_id center_x center_y width height
+**Giới hạn của model hiện tại:** model phân loại chỉ trả nhãn, không cung cấp landmark khuôn mặt. Vì vậy EAR, MAR và góc nghiêng đầu hiện được đánh dấu không khả dụng; không có cảnh báo gục đầu theo góc. Bộ đếm gục đầu chỉ ghi nhận trường hợp mất khuôn mặt sau khi hiệu chỉnh và đã từng thấy mặt. Hiệu chỉnh một giây chỉ khởi động theo dõi mất mặt, không tạo mốc góc đầu. Thanh EAR/MAR bị khóa đến khi có model landmark; các ngưỡng thời gian vẫn dùng được.
+
+Flask API cũ vẫn có thể chạy riêng bằng:
+
+```powershell
+.\.venv\Scripts\python.exe -m drowsiness.app
 ```
 
-Tat ca toa do phai duoc chuan hoa trong khoang `0..1`. Script se kiem tra anh va label truoc khi tai model; neu dataset rong, no se bao dung thu muc can bo sung thay vi in traceback cua Ultralytics.
+## Test và train
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe scripts\train.py
+```
+
+Dataset dùng các thư mục lớp ảnh trong `dataset/Sub1`, `dataset/Sub2` và `dataset/Sub3`. Script huấn luyện model phân loại; model này không tạo landmark hay chỉ số EAR/MAR.
+
+Khi model phân loại có các nhãn mắt/miệng phù hợp, giao diện đọc các nhãn `eye_closed`/`eye_open`, `mouth_open`/`mouth_closed` hoặc `yawn`. Bộ đếm ngáp chỉ tăng khi miệng được nhận diện mở liên tục đủ ngưỡng đã chọn.
