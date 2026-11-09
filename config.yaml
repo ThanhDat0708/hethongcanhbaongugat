@@ -4,6 +4,8 @@ model:
   device: cpu
   imgsz: 320
 
+face_landmarker_path: models/face_landmarker.task
+
 camera:
   index: 0
   width: 640

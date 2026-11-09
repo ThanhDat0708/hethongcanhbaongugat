@@ -13,8 +13,9 @@ from tkinter import ttk
 import cv2
 
 from .config import load_settings
-from .detector import YoloDetector, classify_detection, open_camera
+from .detector import open_camera
 from .history import EventHistory, HistoryEntry
+from .landmarks import FaceLandmarkDetector
 from .monitor import DrowsinessMonitor, MonitorSnapshot
 
 
@@ -24,6 +25,9 @@ class CameraFrame:
     eye: str | None
     mouth: str | None
     face_present: bool
+    ear: float | None
+    mar: float | None
+    face_box: tuple[int, int, int, int] | None
 
 
 class AlertAudio:
@@ -77,8 +81,8 @@ class DrowsinessWindow:
         self.monitor.head_drop_count = self.history.count("head_drop")
         self.root = tk.Tk()
         self.root.title("Driver Watch | Giám sát tài xế")
-        self.root.geometry("1280x860")
-        self.root.minsize(980, 720)
+        self.root.geometry("1280x940")
+        self.root.minsize(980, 820)
         self.root.configure(bg="#10191f")
         self._frames: queue.Queue[CameraFrame] = queue.Queue(maxsize=1)
         self._messages: queue.SimpleQueue[str] = queue.SimpleQueue()
@@ -117,7 +121,7 @@ class DrowsinessWindow:
 
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
-        self.root.rowconfigure(2, weight=0, minsize=200)
+        self.root.rowconfigure(2, weight=0, minsize=240)
 
         header = tk.Frame(self.root, bg="#10191f", padx=20, pady=12)
         header.grid(row=0, column=0, sticky="ew")
@@ -166,7 +170,7 @@ class DrowsinessWindow:
         self.camera_label.pack(side="right")
         self.model_label = tk.Label(
             video_panel,
-            text="MODEL: CHƯA TẢI",
+            text="MODEL LANDMARK: CHƯA TẢI",
             bg="#192831",
             fg="#f0bd69",
             font=("Segoe UI", 8, "bold"),
@@ -223,7 +227,7 @@ class DrowsinessWindow:
         controls_row.pack(fill="x", pady=(8, 0))
         ttk.Checkbutton(
             controls_row, text="Tắt tiếng cảnh báo", variable=self._muted,
-            command=self._refresh_audio,
+            command=self._toggle_mute,
         ).pack(side="left")
         ttk.Button(
             controls_row, text="Thoát", command=self.close
@@ -234,8 +238,8 @@ class DrowsinessWindow:
         metrics_panel.columnconfigure(0, weight=1)
         metrics_panel.columnconfigure(1, weight=1)
         metric_items = (
-            ("EAR - ĐỘ MỞ MẮT", "Không khả dụng"),
-            ("MAR - ĐỘ MỞ MIỆNG", "Không khả dụng"),
+            ("EAR - ĐỘ MỞ MẮT", "--"),
+            ("MAR - ĐỘ MỞ MIỆNG", "--"),
             ("NHẮM MẮT LIÊN TỤC", "0.00 s"),
             ("SỐ LẦN CẢNH BÁO", "0"),
             ("SỐ LẦN NGÁP", "0"),
@@ -304,26 +308,25 @@ class DrowsinessWindow:
             threshold_panel, text="ĐIỀU CHỈNH NGƯỠNG",
             bg="#192831", fg="#e7f0ed", font=("Segoe UI", 9, "bold"),
         ).pack(anchor="w", pady=(0, 4))
+        slider_grid = tk.Frame(threshold_panel, bg="#192831")
+        slider_grid.pack(fill="both", expand=True)
         self._add_slider(
-            threshold_panel, "Ngưỡng EAR (chưa có landmark)", 0.1, 0.4,
-            0.21, enabled=False,
+            slider_grid, "Ngưỡng EAR (độ mở mắt)", 0.1, 0.4,
+            self.monitor.eye_aspect_threshold, self._set_ear_threshold,
+            row=0, column=0, resolution=0.01,
         )
         self._add_slider(
-            threshold_panel, "Ngưỡng MAR (chưa có landmark)", 0.2, 1.0,
-            0.60, enabled=False,
-        )
-        self._add_slider(
-            threshold_panel, "Nhắm mắt → cảnh báo (giây)", 0.5, 5.0,
+            slider_grid, "Nhắm mắt → cảnh báo (giây)", 0.5, 5.0,
             self.settings.eye_closed_threshold, self._set_eye_threshold,
+            row=0, column=1,
         )
         self._add_slider(
-            threshold_panel, "Ngáp → ghi nhận (giây)", 0.5, 5.0,
+            slider_grid, "Ngáp → ghi nhận (giây)", 0.5, 5.0,
             self.settings.yawn_threshold, self._set_yawn_threshold,
+            row=1, column=0,
         )
-        self._add_slider(
-            threshold_panel, "Mất mặt → cảnh báo (giây)", 0.5, 5.0,
-            1.5, self._set_face_threshold,
-        )
+        for column in range(2):
+            slider_grid.columnconfigure(column, weight=1, uniform="threshold")
 
     @staticmethod
     def _add_slider(
@@ -333,10 +336,12 @@ class DrowsinessWindow:
         maximum: float,
         initial: float,
         command=None,
-        enabled: bool = True,
+        row: int = 0,
+        column: int = 0,
+        resolution: float = 0.1,
     ) -> None:
         frame = tk.Frame(parent, bg="#172326")
-        frame.pack(fill="x", pady=3)
+        frame.grid(row=row, column=column, sticky="ew", padx=3, pady=1)
         tk.Label(
             frame, text=label, bg="#172326", fg="#cbd8d4",
             font=("Segoe UI", 8),
@@ -345,29 +350,41 @@ class DrowsinessWindow:
             frame,
             from_=minimum,
             to=maximum,
-            resolution=0.1,
+            resolution=resolution,
             orient="horizontal",
             showvalue=True,
-            command=command,
             bg="#172326",
             fg="#cbd8d4",
             troughcolor="#34484b",
             highlightthickness=0,
             activebackground="#72d5b2",
             font=("Segoe UI", 8),
-            state="normal" if enabled else "disabled",
         )
         scale.set(initial)
+        if command is not None:
+            scale.configure(command=command)
         scale.pack(fill="x")
 
     def _set_eye_threshold(self, value: str) -> None:
         self.monitor.eye_closed_threshold = float(value)
+        self._append_log(f"ĐIỀU CHỈNH NGƯỠNG NHẮM MẮT: {float(value):.1f} giây.")
+
+    def _set_ear_threshold(self, value: str) -> None:
+        self.monitor.eye_aspect_threshold = float(value)
+        self._append_log(f"ĐIỀU CHỈNH NGƯỠNG EAR: {float(value):.2f}.")
 
     def _set_yawn_threshold(self, value: str) -> None:
         self.monitor.yawn_threshold = float(value)
+        self._append_log(f"ĐIỀU CHỈNH NGƯỠNG NGÁP: {float(value):.1f} giây.")
 
-    def _set_face_threshold(self, value: str) -> None:
-        self.monitor.face_missing_threshold = float(value)
+    def _toggle_mute(self) -> None:
+        self._refresh_audio()
+        message = (
+            "ĐÃ TẮT TIẾNG CẢNH BÁO."
+            if self._muted.get()
+            else "ĐÃ BẬT ÂM THANH CẢNH BÁO."
+        )
+        self._append_log(message)
 
     def _update_clock(self) -> None:
         now = datetime.now()
@@ -443,7 +460,7 @@ class DrowsinessWindow:
 
     def _camera_worker(self) -> None:
         camera = None
-        detector = None
+        landmark_detector = None
         try:
             camera = open_camera(
                 self.settings.camera_index,
@@ -452,97 +469,48 @@ class DrowsinessWindow:
                 self.settings.camera_fps,
             )
             self._messages.put("CAMERA:CONNECTED")
-            if self.settings.model_path.exists():
-                try:
-                    detector = YoloDetector(
-                        self.settings.model_path,
-                        self.settings.confidence_threshold,
-                        self.settings.device,
-                        self.settings.inference_size,
-                    )
-                except (ImportError, OSError, RuntimeError) as error:
-                    self._messages.put(f"Không tải được model: {error}")
-            else:
-                self._messages.put(
-                    f"Không tìm thấy model: {self.settings.model_path}"
-                )
-
-            face_detector = None
-            if detector is None or detector.task != "classify":
-                cascade_path = (
-                    cv2.data.haarcascades
-                    + "haarcascade_frontalface_default.xml"
-                )
-                face_detector = cv2.CascadeClassifier(cascade_path)
-                if face_detector.empty():
-                    raise RuntimeError(
-                        f"Không tải được bộ phát hiện khuôn mặt: {cascade_path}"
-                    )
-            self._messages.put("MODEL: SẴN SÀNG" if detector else "MODEL: OFFLINE")
+            landmark_detector = FaceLandmarkDetector(
+                self.settings.face_landmarker_path
+            )
+            self._messages.put("MODEL: LANDMARK SẴN SÀNG")
 
             while not self._stop_camera.is_set():
                 ok, frame = camera.read()
                 if not ok:
                     self._messages.put("Camera không đọc được khung hình.")
                     break
-                eye = None
-                mouth = None
-                face_present = False
-                if detector is not None:
-                    prediction = detector.predict(frame)
-                    if detector.task == "classify":
-                        eye, mouth = self._classify_label(prediction.label)
-                        face_present = prediction.focus_box is not None
-                    else:
-                        eye, mouth = classify_detection(prediction.detections)
-                        if face_detector is None:
-                            raise RuntimeError("Bộ phát hiện khuôn mặt chưa sẵn sàng.")
-                        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                        faces = face_detector.detectMultiScale(
-                            gray,
-                            scaleFactor=1.1,
-                            minNeighbors=5,
-                            minSize=(80, 80),
-                        )
-                        face_present = len(faces) > 0
-                else:
-                    if face_detector is None:
-                        raise RuntimeError("Bộ phát hiện khuôn mặt chưa sẵn sàng.")
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    faces = face_detector.detectMultiScale(
-                        gray,
-                        scaleFactor=1.1,
-                        minNeighbors=5,
-                        minSize=(80, 80),
-                    )
-                    face_present = len(faces) > 0
+                measurements = landmark_detector.process(frame)
+                face_present = measurements is not None
+                ear = measurements.ear if measurements else None
+                mar = measurements.mar if measurements else None
+                face_box = measurements.face_box if measurements else None
+                eye = (
+                    "CLOSED"
+                    if ear is not None and ear < self.monitor.eye_aspect_threshold
+                    else "OPEN" if ear is not None else None
+                )
+                mouth = (
+                    "OPEN"
+                    if mar is not None and mar >= self.monitor.mouth_aspect_threshold
+                    else "CLOSED" if mar is not None else None
+                )
                 packet = CameraFrame(
                     image=frame,
                     eye=eye,
                     mouth=mouth,
                     face_present=face_present,
+                    ear=ear,
+                    mar=mar,
+                    face_box=face_box,
                 )
                 self._put_latest_frame(packet)
-        except (OSError, RuntimeError, cv2.error) as error:
+        except (ImportError, OSError, RuntimeError, ValueError, cv2.error) as error:
             self._messages.put(f"Lỗi camera/nhận diện: {error}")
         finally:
+            if landmark_detector is not None:
+                landmark_detector.close()
             if camera is not None:
                 camera.release()
-
-    @staticmethod
-    def _classify_label(label: str | None) -> tuple[str | None, str | None]:
-        normalized = (label or "").lower().replace("_", "").replace("-", "").replace(" ", "")
-        eye = "CLOSED" if normalized in {
-            "eyeclose", "eyeclosed", "eyesclosed", "closedeye", "closedeyes",
-        } else "OPEN" if normalized in {
-            "eyeopen", "eyeopened", "eyesopen", "openeye", "openeyes", "neutral", "happy",
-        } else None
-        mouth = "OPEN" if normalized in {
-            "yawn", "mouthopen", "openmouth", "mouthopened",
-        } else "CLOSED" if normalized in {
-            "mouthclosed", "closedmouth", "neutral", "happy",
-        } else None
-        return eye, mouth
 
     def _put_latest_frame(self, packet: CameraFrame) -> None:
         try:
@@ -575,6 +543,9 @@ class DrowsinessWindow:
             else:
                 self._append_log(message)
                 if message.startswith(("Lỗi camera", "Camera không")):
+                    self.model_label.configure(
+                        text="MODEL LANDMARK: LỖI", fg="#ff7777"
+                    )
                     self.stop()
                     self.camera_label.configure(
                         text="KHÔNG KẾT NỐI", fg="#ff7777"
@@ -596,7 +567,25 @@ class DrowsinessWindow:
             for event in snapshot.events:
                 self._append_log(event)
             self._render_snapshot(snapshot)
-            self._render_frame(packet.image, snapshot.alert)
+            self.metric_values["EAR - ĐỘ MỞ MẮT"].configure(
+                text=f"{packet.ear:.3f}" if packet.ear is not None else "--"
+            )
+            self.metric_values["MAR - ĐỘ MỞ MIỆNG"].configure(
+                text=f"{packet.mar:.3f}" if packet.mar is not None else "--"
+            )
+            if snapshot.alert:
+                overlay_status = "alert"
+            elif packet.face_present and not snapshot.calibrated:
+                overlay_status = "calibrating"
+            elif packet.face_present:
+                overlay_status = "normal"
+            else:
+                overlay_status = "missing"
+            if any(self._is_detection_event(event) for event in snapshot.events):
+                self._save_detection_snapshot(
+                    packet.image, overlay_status, packet.face_box
+                )
+            self._render_frame(packet.image, overlay_status, packet.face_box)
             audio_error = self._audio.set_active(
                 snapshot.alert and not self._muted.get()
             )
@@ -622,9 +611,8 @@ class DrowsinessWindow:
         )
         self._blink = not self._blink
         if snapshot.alert:
-            message = " + ".join(snapshot.alert_reasons)
             self.banner.configure(
-                text=f"CẢNH BÁO: {message}!",
+                text="CẢNH BÁO: BẠN ĐANG BUỒN NGỦ!",
                 bg="#a62632" if self._blink else "#751b27",
                 fg="#ffffff",
             )
@@ -640,12 +628,62 @@ class DrowsinessWindow:
             self.banner.configure(text=text, bg="#1a4d3e", fg="#e7fff5")
             self.video_label.configure(highlightbackground="#263943")
 
-    def _render_frame(self, frame, alert: bool) -> None:
+    def _render_frame(
+        self,
+        frame,
+        status: str,
+        face_box: tuple[int, int, int, int] | None = None,
+    ) -> None:
+        display = self._annotate_frame(frame, status, face_box)
+        height, width = display.shape[:2]
+        label_width = self.video_label.winfo_width()
+        label_height = self.video_label.winfo_height()
+        if label_width > 2 and label_height > 2:
+            ratio = min(
+                (label_width - 4) / width,
+                (label_height - 4) / height,
+            )
+            target_size = (
+                max(1, int(width * ratio)),
+                max(1, int(height * ratio)),
+            )
+            display = cv2.resize(
+                display,
+                target_size,
+                interpolation=cv2.INTER_AREA if ratio < 1 else cv2.INTER_LINEAR,
+            )
+        height, width = display.shape[:2]
+        ok, encoded = cv2.imencode(".png", display)
+        if not ok:
+            raise RuntimeError("Không mã hóa được khung hình camera.")
+        self._photo = tk.PhotoImage(
+            master=self.root,
+            data=base64.b64encode(encoded.tobytes()).decode("ascii"),
+            format="PNG",
+        )
+        self.video_label.configure(image=self._photo, text="")
+
+    def _annotate_frame(
+        self,
+        frame,
+        status: str,
+        face_box: tuple[int, int, int, int] | None = None,
+    ):
         display = frame.copy()
-        frame_height, frame_width = display.shape[:2]
+        colors = {
+            "normal": (55, 190, 75),
+            "calibrating": (0, 210, 255),
+            "missing": (0, 210, 255),
+            "alert": (40, 40, 245),
+        }
+        color = colors[status]
+        if face_box is not None and status != "missing":
+            self._draw_face_box(display, face_box, color)
+        else:
+            guide_color = colors["alert"] if status == "alert" else colors["missing"]
+            self._draw_dashed_guide(display, guide_color)
         now = datetime.now()
         timestamp = f"{now:%H:%M:%S}  {now:%d/%m/%Y}"
-        color = (45, 54, 255) if alert else (114, 213, 178)
         cv2.putText(
             display,
             timestamp,
@@ -656,31 +694,88 @@ class DrowsinessWindow:
             2,
             cv2.LINE_AA,
         )
-        label_width = self.video_label.winfo_width()
-        label_height = self.video_label.winfo_height()
-        if label_width > 2 and label_height > 2:
-            ratio = min(
-                (label_width - 4) / frame_width,
-                (label_height - 4) / frame_height,
+        return display
+
+    @staticmethod
+    def _is_detection_event(event: str) -> bool:
+        return event.startswith(
+            (
+                "PHÁT HIỆN NGỦ GẬT",
+                "PHÁT HIỆN NGÁP",
+                "MẤT KHUÔN MẶT - NGHI GỤC ĐẦU",
             )
-            target_size = (
-                max(1, int(frame_width * ratio)),
-                max(1, int(frame_height * ratio)),
-            )
-            display = cv2.resize(
-                display,
-                target_size,
-                interpolation=cv2.INTER_AREA if ratio < 1 else cv2.INTER_LINEAR,
-            )
-        height, width = display.shape[:2]
-        rgb = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
-        ppm = f"P6\n{width} {height}\n255\n".encode("ascii") + rgb.tobytes()
-        self._photo = tk.PhotoImage(
-            master=self.root,
-            data=base64.b64encode(ppm).decode("ascii"),
-            format="PPM",
         )
-        self.video_label.configure(image=self._photo, text="")
+
+    def _save_detection_snapshot(
+        self,
+        frame,
+        status: str,
+        face_box: tuple[int, int, int, int] | None,
+    ) -> Path | None:
+        timestamp = datetime.now()
+        filename = f"detection_{timestamp:%Y%m%d_%H%M%S_%f}.jpg"
+        path = self.settings.snapshot_dir / filename
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            annotated = self._annotate_frame(frame, status, face_box)
+            if not cv2.imwrite(str(path), annotated):
+                raise OSError(f"OpenCV không ghi được tệp {path}.")
+        except (OSError, cv2.error) as error:
+            self._append_log(f"KHÔNG LƯU ĐƯỢC ẢNH PHÁT HIỆN: {error}")
+            return None
+        self._append_log(f"ĐÃ LƯU ẢNH PHÁT HIỆN: {path}")
+        return path
+
+    @staticmethod
+    def _draw_face_box(
+        frame, box: tuple[int, int, int, int], color: tuple[int, int, int]
+    ) -> None:
+        height, width = frame.shape[:2]
+        x1, y1, x2, y2 = box
+        x1 = max(0, min(width - 1, x1))
+        y1 = max(0, min(height - 1, y1))
+        x2 = max(x1 + 1, min(width - 1, x2))
+        y2 = max(y1 + 1, min(height - 1, y2))
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1, cv2.LINE_AA)
+        corner = max(12, min(x2 - x1, y2 - y1) // 5)
+        for start_x, direction_x in ((x1, 1), (x2, -1)):
+            for start_y, direction_y in ((y1, 1), (y2, -1)):
+                cv2.line(
+                    frame,
+                    (start_x, start_y),
+                    (start_x + direction_x * corner, start_y),
+                    color,
+                    4,
+                    cv2.LINE_AA,
+                )
+                cv2.line(
+                    frame,
+                    (start_x, start_y),
+                    (start_x, start_y + direction_y * corner),
+                    color,
+                    4,
+                    cv2.LINE_AA,
+                )
+
+    @staticmethod
+    def _draw_dashed_guide(frame, color: tuple[int, int, int]) -> None:
+        height, width = frame.shape[:2]
+        box_width = max(40, min(int(width * 0.42), 320))
+        box_height = max(50, min(int(height * 0.66), 400))
+        x1 = (width - box_width) // 2
+        y1 = (height - box_height) // 2
+        x2 = x1 + box_width
+        y2 = y1 + box_height
+        dash_length = 12
+        gap_length = 8
+        for x in range(x1, x2, dash_length + gap_length):
+            end_x = min(x + dash_length, x2)
+            cv2.line(frame, (x, y1), (end_x, y1), color, 2, cv2.LINE_AA)
+            cv2.line(frame, (x, y2), (end_x, y2), color, 2, cv2.LINE_AA)
+        for y in range(y1, y2, dash_length + gap_length):
+            end_y = min(y + dash_length, y2)
+            cv2.line(frame, (x1, y), (x1, end_y), color, 2, cv2.LINE_AA)
+            cv2.line(frame, (x2, y), (x2, end_y), color, 2, cv2.LINE_AA)
 
     def _refresh_audio(self) -> None:
         if self._latest is not None:

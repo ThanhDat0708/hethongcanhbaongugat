@@ -26,10 +26,14 @@ class DrowsinessMonitor:
         eye_closed_threshold: float = 2.0,
         yawn_threshold: float = 1.5,
         face_missing_threshold: float = 1.5,
+        eye_aspect_threshold: float = 0.21,
+        mouth_aspect_threshold: float = 0.5,
     ) -> None:
         self.eye_closed_threshold = eye_closed_threshold
         self.yawn_threshold = yawn_threshold
         self.face_missing_threshold = face_missing_threshold
+        self.eye_aspect_threshold = eye_aspect_threshold
+        self.mouth_aspect_threshold = mouth_aspect_threshold
         self.alert_count = 0
         self.yawn_count = 0
         self.head_drop_count = 0

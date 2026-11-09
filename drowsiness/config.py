@@ -7,6 +7,7 @@ import yaml
 @dataclass(frozen=True)
 class Settings:
     model_path: Path
+    face_landmarker_path: Path = Path("models/face_landmarker.task")
     camera_index: int = 0
     confidence_threshold: float = 0.5
     device: str = "cpu"
@@ -37,8 +38,14 @@ def load_settings(path: str | Path = "config.yaml") -> Settings:
     model_path = model.get("path", values.get("model_path", "models/best.pt"))
     if not Path(model_path).is_absolute():
         model_path = config_path.parent / model_path
+    face_landmarker_path = values.get(
+        "face_landmarker_path", "models/face_landmarker.task"
+    )
+    if not Path(face_landmarker_path).is_absolute():
+        face_landmarker_path = config_path.parent / face_landmarker_path
     return Settings(
         model_path=Path(model_path),
+        face_landmarker_path=Path(face_landmarker_path),
         camera_index=values.get("camera_index", camera.get("index", 0)),
         confidence_threshold=model.get("confidence", values.get("confidence_threshold", 0.5)),
         device=model.get("device", "cpu"),

@@ -4,3 +4,4 @@ opencv-python>=4.10,<5
 ultralytics>=8.3,<9
 pytest>=8.0,<9
 PyYAML>=6.0,<7
+mediapipe>=0.10.31,<0.10.32
